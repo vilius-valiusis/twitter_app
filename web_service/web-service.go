@@ -7,6 +7,7 @@ import (
 	"log"
 	"strconv"
 	"math"
+	"time"
 )
 
 type mytype struct{}
@@ -36,7 +37,11 @@ func setupRedisClient() {
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
-
+	snd := strconv.FormatInt(time.Now().Unix(), 10)
+	err := redisClient.Set(snd,1,0 ).Err()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func calculateAverage() float64{

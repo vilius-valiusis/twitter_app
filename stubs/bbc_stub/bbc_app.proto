@@ -15,25 +15,25 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "twitter_app.twitter_app";
-option java_outer_classname = "TwitterAppProto";
+option java_package = "stubs.stubs";
+option java_outer_classname = "bbcAppProto";
 
-package twitterapp;
+package bbcapp;
 
 // The greeting service definition.
-service TwitterService {
-  // Sends a greeting
-  rpc getTweets (TweetRequest) returns (stream TweetResponse) {}
+service NewsService {
+    // Sends a greeting
+    rpc getNews (NewsRequest) returns (stream NewsResponse) {}
 }
 
 // The request message containing the user's name.
-message TweetRequest {
-  string name = 1;
+message NewsRequest {
+    string query = 1;
 }
 
 // The response message containing the greetings
-message TweetResponse {
-  string tweet_text = 1;
+message NewsResponse {
+    string news_text = 1;
 }
 
-//protoc -I ./twitter_app --go_out=plugins=grpc:twitter_app ./twitter_app/twitter_app.proto
+//protoc -I ./stubs --go_out=plugins=grpc:stubs ./stubs/stubs.proto

@@ -1,11 +1,11 @@
-FROM golang:1.8
+FROM golang:latest
 
 WORKDIR /go
 COPY . .
 
-RUN go get -d ./...
+RUN go get -d -v ./...
 RUN go build twitter-service.go
 
-EXPOSE 10000
+EXPOSE 3000
 
 ENTRYPOINT ["/go/twitter-service"]

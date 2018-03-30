@@ -9,7 +9,7 @@ import (
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/dghubble/oauth1"
 	"google.golang.org/grpc"
-	pb "github.com/vilius-valiusis/twitter_app/twitter_app"
+	pb "github.com/vilius-valiusis/twitter_app/stubs/twitter_stub"
 	"net"
 	"flag"
 	"google.golang.org/grpc/credentials"
@@ -20,8 +20,7 @@ var (
 	tls        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
 	certFile   = flag.String("cert_file", "", "The TLS cert file")
 	keyFile    = flag.String("key_file", "", "The TLS key file")
-	jsonDBFile = flag.String("json_db_file", "testdata/route_guide_db.json", "A json file containing a list of features")
-	port       = flag.Int("port", 10000, "The server port")
+	port       = flag.Int("port", 3000, "The server port")
 )
 
 type Server struct{}
@@ -51,6 +50,7 @@ func (s *Server) GetTweets(in *pb.TweetRequest,tweetStream pb.TwitterService_Get
 
 	// Send out a response on every new tweet
 	demux.Tweet = func(tweet *twitter.Tweet){
+		log.Println(tweet.Text)
 		tweetStream.Send(&pb.TweetResponse{TweetText:tweet.Text})
 	}
 
@@ -77,7 +77,7 @@ func (s *Server) GetTweets(in *pb.TweetRequest,tweetStream pb.TwitterService_Get
 
 func main() {
 	flag.Parse()
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}

@@ -13,6 +13,13 @@ services:
       - "3000:3000"
     entrypoint: /go/twitter-service
 
+  bbc-service:
+    build:
+      context: "./bbc_service"
+    ports:
+      - "3001:3001"
+    entrypoint: /go/bbc-service
+
   analysis-service:
     build:
       context: "./analysis_service"

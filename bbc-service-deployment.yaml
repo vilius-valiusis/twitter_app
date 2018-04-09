@@ -1,0 +1,29 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.11.0 (39ad614)
+  creationTimestamp: null
+  labels:
+    io.kompose.service: bbc-service
+  name: bbc-service
+spec:
+  replicas: 1
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        io.kompose.service: bbc-service
+    spec:
+      containers:
+      - command:
+        - /go/bbc-service
+        image: bbc-service
+        name: bbc-service
+        ports:
+        - containerPort: 3001
+        resources: {}
+      restartPolicy: Always
+status: {}

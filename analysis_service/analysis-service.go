@@ -15,18 +15,37 @@ import (
 	"github.com/go-redis/redis"
 	"time"
 	"strconv"
+	"encoding/json"
+	"sync"
 )
 
 
 var (
-	tls                = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	caFile             = flag.String("ca_file", "", "The file containning the CA root cert file")
-	twitterServerAddr  = flag.String("twitter_server_addr", "localhost:3000", "")
-	bbcServerAddr  = flag.String("bbc_server_addr", "localhost:3001", "")
-	serverHostOverride = flag.String("server_host_override", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
+	tls                 = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
+	caFile              = flag.String("ca_file", "", "The file containning the CA root cert file")
+
+	twitterServerAddr   = flag.String("twitter_server_addr", "twitter-service:3000", "")
+	bbcServerAddr       = flag.String("bbc_server_addr", "bbc-service:3001", "")
+	redisServerAddr       = flag.String("redis_server_addr", "redis:6379", "")
+
+	serverHostOverride  = flag.String("server_host_override", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
 	redisClient        *redis.Client
-	sentimentModel *sentiment.Models
+	sentimentModel     *sentiment.Models
+	messages           MessageStore
+	previousTime       int64 = 0
 )
+const(
+	EXPIRE_TIME = 3 * time.Minute
+	TWITTER = "twitter"
+	BBC = "bbc"
+)
+type MessageStore struct{
+	Messages []Message
+}
+type Message struct{
+	Score uint8
+	DataSource string
+}
 
 func performSentimentAnalysis(model *sentiment.Models, res string) uint8{
 	analysis := model.SentimentAnalysis(res, sentiment.English)
@@ -39,6 +58,41 @@ func restoreSentimentalModel(){
 		panic(fmt.Sprintf("Could not restore model!\n\t%v\n", err))
 	}
 	sentimentModel = &model
+}
+
+func (m MessageStore) MarshalBinary() ([]byte, error) {
+	return json.Marshal(m)
+}
+
+func appendMessage(source string,submitScore uint8){
+	var m = Message{}
+	switch source{
+		case BBC:
+			m = Message{Score : submitScore,DataSource : BBC}
+
+		case TWITTER:
+			m = Message{Score : submitScore,DataSource : TWITTER}
+	}
+	messages.Messages = append(messages.Messages, m)
+}
+
+func submitResults(submitTime int64,submitScore uint8,source string){
+
+	if submitTime == previousTime || previousTime == 0{
+		appendMessage(source,submitScore)
+		previousTime = submitTime
+	}else{
+		previousTime = submitTime
+		fmt.Println(messages)
+		seconds := strconv.FormatInt(submitTime, 10)
+		err := redisClient.Set(seconds, messages, EXPIRE_TIME).Err()
+		if err != nil {
+			panic(err)
+		}
+
+		messages.Messages = []Message{}
+		appendMessage(source,submitScore)
+	}
 }
 
 func twitterSentimentAnalysis(client pbt.TwitterServiceClient,tweet *pbt.TweetRequest ) {
@@ -56,15 +110,8 @@ func twitterSentimentAnalysis(client pbt.TwitterServiceClient,tweet *pbt.TweetRe
 		if err != nil {
 			log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 		}
-
 		score := performSentimentAnalysis(sentimentModel, feature.TweetText)
-		log.Println(score)
-		//Seconds passed since january 1970
-		snd := strconv.FormatInt(time.Now().Unix(), 10)
-		err = redisClient.Set(snd,score,0 ).Err() // 10 minutes
-		if err != nil {
-			panic(err)
-		}
+		submitResults(time.Now().Unix(),score,TWITTER)
 	}
 }
 
@@ -84,19 +131,13 @@ func newsSentimentAnalysis(client pbb.NewsServiceClient, query *pbb.NewsRequest)
 		}
 
 		score := performSentimentAnalysis(sentimentModel, feature.NewsText)
-		log.Println(score)
-		//Seconds passed since january 1970
-		snd := strconv.FormatInt(time.Now().Unix(), 10)
-		err = redisClient.Set(snd,score,0 ).Err() // 10 minutes
-		if err != nil {
-			panic(err)
-		}
+		submitResults(time.Now().Unix(),score,BBC)
 	}
 }
 
 func setupRedisClient() {
 	redisClient = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
+		Addr:     *redisServerAddr,
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
@@ -114,7 +155,7 @@ func setupTwitterClient(opts []grpc.DialOption){
 	twitterSentimentAnalysis(client,&pbt.TweetRequest{Name:"dog"})
 }
 
-func setupBBCClient(opts []grpc.DialOption){
+func setupBBCClient(opts []grpc.DialOption) {
 	conn, err := grpc.Dial(*bbcServerAddr, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
@@ -128,7 +169,6 @@ func setupBBCClient(opts []grpc.DialOption){
 func main() {
 	setupRedisClient()
 	restoreSentimentalModel()
-
 	flag.Parse()
 	var opts []grpc.DialOption
 	if *tls {
@@ -143,6 +183,17 @@ func main() {
 	} else {
 		opts = append(opts, grpc.WithInsecure())
 	}
-	//setupTwitterClient(opts)
-	setupBBCClient(opts)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		setupTwitterClient(opts)
+		wg.Done()
+	}()
+	go func() {
+		setupBBCClient(opts)
+		wg.Done()
+	}()
+
+	wg.Wait()
 }

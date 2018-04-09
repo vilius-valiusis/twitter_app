@@ -9,9 +9,11 @@ import (
 	"flag"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/testdata"
-	"net/http"
 	"io/ioutil"
 	"encoding/json"
+	"net/http"
+	"strconv"
+	"time"
 )
 
 var (
@@ -24,6 +26,9 @@ var (
 const (
 	apiKey = "&apiKey=b177f2e17a184597b5f1ad36133436b5";
 	apiUrl = "https://newsapi.org/v2/everything?q="
+	apiPage = "&page="
+	apiSource = "sources=bbc-news&"
+	maxPageLimit = 500
 )
 
 type Source struct{
@@ -40,27 +45,32 @@ type Server struct{}
 
 func (s *Server) GetNews(in *pb.NewsRequest,stream pb.NewsService_GetNewsServer) error {
 	// Do a GET request to the api
-	response, err := http.Get(apiUrl + in.Query + apiKey)
+	var currentPage = 0
+	for currentPage < maxPageLimit{
+		time.Sleep(3 * time.Second)
+		response, err := http.Get(apiUrl + in.Query + apiPage + apiSource + strconv.Itoa(currentPage) + apiKey)
 
-	if err != nil {
-		fmt.Printf("The HTTP request failed with error %s\n", err)
+		if err != nil {
+			fmt.Printf("The HTTP request failed with error %s\n", err)
+		}
+
+		responseData, err := ioutil.ReadAll(response.Body)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		var sourceObject Source
+		json.Unmarshal(responseData, &sourceObject)
+
+
+		for _,v := range sourceObject.Articles{
+			time.Sleep(2 * time.Millisecond)
+			stream.Send(&pb.NewsResponse{NewsText: v.Description})
+			log.Println(v.Description)
+		}
+		currentPage++
 	}
-
-	responseData, err := ioutil.ReadAll(response.Body)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var sourceObject Source
-	json.Unmarshal(responseData, &sourceObject)
-
-
-	for _,v := range sourceObject.Articles{
-		stream.Send(&pb.NewsResponse{NewsText: v.Description})
-		log.Println(v.Description)
-	}
-
 	return nil
 }
 

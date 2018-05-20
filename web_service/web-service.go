@@ -31,6 +31,11 @@ type ScoreTable struct{
 	twitter []uint8
 	bbc     []uint8
 }
+type AverageScore struct{
+	createdAt time.Time
+	twitter float64
+	bbc		float64
+}
 const(
 	TWITTER = "twitter"
 	BBC = "bbc"
@@ -56,6 +61,26 @@ func StatusHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Twitter: %s (%.0f%%)" ,hashBarBuilder(tw),tw*100)
 	fmt.Fprintln(w,"")
 	fmt.Fprintf(w, "BBC News: %s (%.0f%%)",hashBarBuilder(bbc) ,bbc*100)
+}
+func ApiHandler(w http.ResponseWriter, r *http.Request) {
+	tw,bbc := buildAverage()
+	scores := AverageScore{}
+	err := json.NewDecoder(r.Body).Decode(&scores)
+	if err != nil{
+		panic(err)
+	}
+	scores.twitter = tw
+	scores.bbc = bbc
+	scores.createdAt = time.Now().Local()
+
+	scoreJson, err := json.Marshal(scores)
+	if err != nil{
+		panic(err)
+	}
+
+	w.Header().Set("Content-Type","application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(scoreJson)
 }
 
 func hashBarBuilder(bar float64) string{
@@ -132,6 +157,7 @@ func buildAverage() (float64,float64){
 		if fromInt < toInt {
 			value, _ := redisClient.Get(strconv.Itoa(fromInt)).Result()
 			ms.UnmarshalBinary([]byte(value))
+
 			scoreTable.getAllScores(ms)
 			fromInt += 1
 			v=v
@@ -157,6 +183,7 @@ func main() {
 	http.Handle("/", t)
 
 	http.HandleFunc("/sentiment/", StatusHandler)
+	http.HandleFunc("/sentiment/api/", ApiHandler)
 
 	http.ListenAndServe(":8080", nil)
 }

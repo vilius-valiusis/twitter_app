@@ -35,7 +35,7 @@ var (
 	previousTime       int64 = 0
 )
 const(
-	EXPIRE_TIME = 3 * time.Minute
+	EXPIRE_TIME = 24 * time.Hour
 	TWITTER = "twitter"
 	BBC = "bbc"
 )

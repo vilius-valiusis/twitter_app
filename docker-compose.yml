@@ -26,6 +26,9 @@ services:
     links:
         - redis
     entrypoint: /go/analysis-service
+    depends_on:
+        - twitter-service
+        - bbc-service
 
   client:
     build:
